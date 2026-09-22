@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-# Ensure dev mode (no SpiceDB) for tests
-os.environ.pop("SPICEDB_ENDPOINT", None)
 
 from app.main import app
 
@@ -183,19 +179,35 @@ async def test_cluster_list(client):
 
 @pytest.mark.asyncio
 async def test_auth_rejects_unauthorized(client):
-    """Test that auth middleware rejects requests when SpiceDB is configured but no token."""
-    with patch.dict(os.environ, {"SPICEDB_ENDPOINT": "localhost:50051", "SPICEDB_TOKEN": "test"}):
-        # Reimport to pick up env change - simulate by patching _is_dev_mode
-        with patch("app.auth._is_dev_mode", return_value=False):
-            response = await client.get("/api/v1/csp")
+    """Test that auth middleware rejects requests with no credentials when auth is enforced."""
+    with patch("app.auth._is_dev_mode", return_value=False):
+        response = await client.get("/api/v1/csp")
     assert response.status_code == 401
-    assert "Unauthorized" in response.json()["detail"]
+    assert response.json() == {"detail": "Missing or invalid Authorization header"}
 
 
 @pytest.mark.asyncio
 async def test_auth_rejects_invalid_token(client):
-    """Test that auth middleware rejects invalid JWT tokens."""
-    with patch("app.auth._is_dev_mode", return_value=False):
+    """Test that auth middleware rejects invalid JWT tokens.
+
+    Bearer tokens are verified by substrate-auth-api /auth/check (no local JWT decode since
+    0d00a72); the stub auth-api answers 401 for this token, and the middleware passes it on.
+    """
+    import httpx
+    from types import SimpleNamespace
+    import app.auth as auth
+
+    def auth_api(request):
+        assert request.url.path == "/auth/check"
+        assert request.headers["authorization"] == "Bearer invalid.token.here"
+        return httpx.Response(401, json={"detail": "invalid token"})
+
+    class StubClient(httpx.AsyncClient):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, transport=httpx.MockTransport(auth_api), **kwargs)
+
+    with patch("app.auth._is_dev_mode", return_value=False), \
+         patch.object(auth, "httpx", SimpleNamespace(AsyncClient=StubClient, HTTPError=httpx.HTTPError)):
         response = await client.get(
             "/api/v1/csp",
             headers={"Authorization": "Bearer invalid.token.here"},
