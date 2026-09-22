@@ -22,28 +22,34 @@ def init_table() -> None:
 
 
 def _get_table():
+    """Return the DynamoDB table, initializing it on first use."""
     if _table is None:
         init_table()
     return _table
 
 
 def _build_pk(kind: str, entry_id: str) -> str:
+    """Return the partition key ``ENTRY#<kind>#<entry_id>``."""
     return f"ENTRY#{kind}#{entry_id}"
 
 
 def _build_sk() -> str:
+    """Return the fixed sort key ``CONFIG``."""
     return "CONFIG"
 
 
 def _build_gsi1pk() -> str:
+    """Return the fixed GSI1 partition key ``CATALOG``."""
     return "CATALOG"
 
 
 def _build_gsi1sk(kind: str, status: str, entry_id: str) -> str:
+    """Return the GSI1 sort key ``<kind>#<status>#<entry_id>``."""
     return f"{kind}#{status}#{entry_id}"
 
 
 def _put_entry_sync(kind: str, entry_id: str, data: dict[str, Any]) -> None:
+    """Put an entry item with its table and GSI1 keys (status defaults to ACTIVE)."""
     table = _get_table()
     status = data.get("status", "ACTIVE")
     item = {
@@ -59,6 +65,7 @@ def _put_entry_sync(kind: str, entry_id: str, data: dict[str, Any]) -> None:
 
 
 def _get_entry_sync(kind: str, entry_id: str) -> dict[str, Any] | None:
+    """Get an entry by kind and ID with key attributes stripped; None if absent."""
     table = _get_table()
     response = table.get_item(
         Key={"PK": _build_pk(kind, entry_id), "SK": _build_sk()}
@@ -73,6 +80,10 @@ def _get_entry_sync(kind: str, entry_id: str) -> dict[str, Any] | None:
 
 
 def _list_entries_sync(kind: str, status: str | None = None) -> list[dict[str, Any]]:
+    """List entries of ``kind`` (optionally by status) via GSI1, keys stripped.
+
+    Only the first page of query results is returned.
+    """
     table = _get_table()
     if status:
         prefix = f"{kind}#{status}#"
@@ -96,6 +107,7 @@ def _list_entries_sync(kind: str, status: str | None = None) -> list[dict[str, A
 def _update_status_sync(
     kind: str, entry_id: str, status: str, extra: dict[str, Any] | None = None
 ) -> None:
+    """Set an entry's status (and GSI1 sort key) plus any ``extra`` attributes."""
     table = _get_table()
     update_expr = "SET #st = :status, GSI1SK = :gsi1sk"
     expr_values: dict[str, Any] = {
@@ -119,6 +131,7 @@ def _update_status_sync(
 
 
 def _delete_entry_sync(kind: str, entry_id: str) -> None:
+    """Delete an entry by kind and ID."""
     table = _get_table()
     table.delete_item(Key={"PK": _build_pk(kind, entry_id), "SK": _build_sk()})
 
