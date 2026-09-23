@@ -1,0 +1,17 @@
+name: Tests
+
+# Runs the single test entry point (guard-core docs/TESTING-STANDARD.md).
+# Private wheels are vendored in docker/wheels, so no secrets are needed.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run tests
+        run: bash scripts/test.sh

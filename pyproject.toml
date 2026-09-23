@@ -28,5 +28,13 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.pytest.ini_options]
+# Single entry point: scripts/test.sh (guard-core docs/TESTING-STANDARD.md).
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+pythonpath = ["."]
+norecursedirs = [".*", "venv", "node_modules", "cdk.out*", "build", "dist", "*.egg-info"]
+addopts = ["--strict-markers", "-m", "not integration"]
+markers = [
+    "integration: needs a live cluster, AWS account or third-party service (run: scripts/test.sh -m integration)",
+]
