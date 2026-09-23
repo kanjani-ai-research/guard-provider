@@ -28,16 +28,26 @@ SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/ui/manifest"}
 
 
 def _is_dev_mode() -> bool:
+    """Return True if auth is bypassed.
+
+    That is when AUTH_API_URL is empty, or it is the default in-cluster URL and
+    ENFORCE_AUTH is unset.
+    """
     return not AUTH_API_URL or AUTH_API_URL == "http://substrate-auth-api.substrate:8080" and not os.environ.get("ENFORCE_AUTH")
 
 
 def _permission_for_method(method: str) -> str:
+    """Map an HTTP method to ``view`` (GET/HEAD/OPTIONS) or ``manage``."""
     if method in ("GET", "HEAD", "OPTIONS"):
         return "view"
     return "manage"
 
 
 def _resource_from_path(path: str) -> tuple[str, str]:
+    """Derive ``(resource_type, resource_id)`` from an ``/api/v1/<type>[/<id>]`` path.
+
+    The ID defaults to ``*``; other paths map to ``("guard-provider", "*")``.
+    """
     parts = path.strip("/").split("/")
     if len(parts) >= 3 and parts[0] == "api" and parts[1] == "v1":
         resource_type = parts[2]
